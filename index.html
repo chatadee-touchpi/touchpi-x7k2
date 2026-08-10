@@ -1343,9 +1343,16 @@ input,select,textarea{font-family:inherit;}
       🕐 Session หมดอายุ: <b>01:45 น.</b>
       (อีก 7 ชม. 59 นาที)<br>
       📍 สาขา: <b>ยังไม่ได้ตั้งค่า</b></div>
-        <div class="setting-row">
-          <div><label>ต้องล็อกอินทุกครั้งที่เปิดโปรแกรม</label><small>เปิด = ไม่จำ Session ข้ามวัน</small></div>
-          <button class="avail-tog" id="alwaysLoginTog" onclick="toggleAlwaysLogin()"></button>
+        <div class="fg" style="margin:10px 0">
+          <label style="font-size:10px;font-weight:700;color:var(--gray);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.8px">โหมดการจำ Session</label>
+          <select id="sessionModeSel" class="fc" onchange="setSessionMode(this.value)" style="max-width:290px">
+            <option value="always">🔒 ถามล็อกอินทุกครั้งที่เปิด (แนะนำ)</option>
+            <option value="8h">จำการเข้าสู่ระบบ 8 ชั่วโมง</option>
+            <option value="24h">จำการเข้าสู่ระบบ 24 ชั่วโมง</option>
+            <option value="7d">จำการเข้าสู่ระบบ 7 วัน</option>
+            <option value="30d">จำการเข้าสู่ระบบ 30 วัน</option>
+          </select>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:5px">เครื่องใช้ร่วมกันหลายคน แนะนำ "ถามล็อกอินทุกครั้ง" เพื่อความปลอดภัย</div>
         </div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;">
           <button class="btn btn-outline-red btn-sm" onclick="doLogout()">🚪 ออกจากระบบ / เปลี่ยนผู้ใช้</button>
@@ -1371,6 +1378,15 @@ input,select,textarea{font-family:inherit;}
         <div style="display:flex;gap:7px;margin-top:10px;flex-wrap:wrap">
           <button class="btn btn-outline btn-sm" onclick="previewSplash()">👁️ ดูตัวอย่าง Splash</button>
           <button class="btn btn-outline-red btn-sm" id="splashClearBtn" onclick="clearSplashImage()" style="">🗑️ ลบรูปพื้นหลัง</button>
+        </div>
+        <div style="margin-top:12px;padding:10px 12px;background:var(--light);border-radius:8px;border:1px dashed var(--border)">
+          <div style="font-size:11.5px;font-weight:700;color:var(--navy);margin-bottom:4px">🌐 ใช้ภาพนี้เป็นค่ากลางทุกสาขา</div>
+          <div id="splashSyncStatus" style="font-size:10.5px;color:var(--muted);margin-bottom:8px">กำลังตรวจสอบ...</div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap">
+            <button class="btn btn-teal btn-sm" onclick="pushSplashToCloud()">☁️ ตั้งเป็นค่ากลาง (ทุกสาขา)</button>
+            <button class="btn btn-outline-red btn-sm" onclick="clearCentralSplash()">🗑️ ยกเลิกค่ากลาง</button>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:6px">เครื่องอื่นจะได้รับรูปนี้อัตโนมัติตอนกด "⟳ ซิงก์" — รูปจะถูกบีบอัดให้เล็กพอสำหรับ Google Sheets</div>
         </div>
       </div>
       <div class="setting-card">
@@ -1511,6 +1527,7 @@ input,select,textarea{font-family:inherit;}
     <div class="users-toolbar">
       <h3>👥 จัดการผู้ใช้งาน</h3>
       <button class="btn btn-outline btn-sm" onclick="openChangeMyPassword()">🔑 เปลี่ยนรหัสของฉัน</button>
+      <button class="btn btn-outline btn-sm" id="rolePermsBtn" onclick="openRolePermsEditor()" style="display:none">🛡️ ตั้งค่าสิทธิ์ Role</button>
       <button class="btn btn-teal btn-sm" id="addUserBtn" onclick="openNewUser()">+ เพิ่มผู้ใช้</button>
     </div>
     <div class="users-body">
@@ -1888,6 +1905,22 @@ input,select,textarea{font-family:inherit;}
   </div>
 </div>
 
+
+<!-- ROLE PERMISSIONS EDITOR MODAL -->
+<div class="mo" id="moRolePerms">
+  <div class="md" style="max-width:560px">
+    <div class="md-hdr"><div><h3>🛡️ ตั้งค่าสิทธิ์ Role</h3><p>Admin สิทธิ์เต็มเสมอ (ล็อกไว้) แก้ไขได้เฉพาะ Manager และ Cashier</p></div><button class="md-x" onclick="closeMo('moRolePerms')">✕</button></div>
+    <div class="md-body" style="max-height:62vh;overflow-y:auto">
+      <div id="rolePermsBody"></div>
+    </div>
+    <div class="md-foot" style="flex-wrap:wrap;gap:7px">
+      <button class="btn btn-outline" onclick="resetRolePermsUI()">↩ คืนค่าเริ่มต้น</button>
+      <button class="btn btn-outline" onclick="closeMo('moRolePerms')">ยกเลิก</button>
+      <button class="btn btn-teal" onclick="saveRolePermsFromUI()">💾 บันทึกสิทธิ์</button>
+    </div>
+  </div>
+</div>
+
 <div id="printArea"></div>
 <div class="toast-wrap" id="toastWrap"></div>
 <script>
@@ -2001,14 +2034,29 @@ async function syncFromCloud() {
   showSyncStatus('syncing','กำลังซิงก์...');
   const bid = getMyBranchId();
   try {
-    const [cloudMenu, cloudTables, cloudCats] = await Promise.all([
+    const [cloudMenu, cloudTables, cloudCats, cloudSettings] = await Promise.all([
       gasGet('getMenu',    bid ? {branchId:bid} : {}),
       gasGet('getTables',  bid ? {branchId:bid} : {}),
       gasGet('getCategories'),
+      gasGet('getSettings').catch(()=>null),
     ]);
     if (cloudMenu    && cloudMenu.length)    { menu  = cloudMenu;    localStorage.setItem('rp_menu',  JSON.stringify(menu));  }
     if (cloudTables  && cloudTables.length)  { tables= cloudTables;  localStorage.setItem('rp_tables',JSON.stringify(tables));}
     if (cloudCats    && cloudCats.length)    { categories=cloudCats; localStorage.setItem('rp_cats',  JSON.stringify(categories)); }
+    if (cloudSettings && Object.keys(cloudSettings).length) {
+      settings = Object.assign(settings, cloudSettings);
+      localStorage.setItem('rp_settings', JSON.stringify(settings));
+      // Central splash image/tap — override local copy so all branches match
+      if (cloudSettings.splashImg) {
+        localStorage.setItem('rp_splash_img', cloudSettings.splashImg);
+      }
+      if (typeof cloudSettings.splashTap === 'string') {
+        if (cloudSettings.splashTap) localStorage.setItem('rp_splash_tap', cloudSettings.splashTap);
+        else localStorage.removeItem('rp_splash_tap');
+      }
+      if (typeof updateSplashDisplay==='function') updateSplashDisplay();
+      if (typeof refreshSplashSettingsUI==='function') refreshSplashSettingsUI();
+    }
     showSyncStatus('ok','ซิงก์แล้ว ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
     buildCatTabs(); renderMenu(); renderTableGrid(); refreshCatDropdown();
   } catch(e) {
@@ -3430,7 +3478,7 @@ function switchToBranches(){
 ════════════════════════════════════════════════════════════════ */
 
 /* ── ROLE PERMISSIONS MATRIX ────────────────────────────────── */
-const ROLES = {
+const DEFAULT_ROLES = {
   admin: {
     label:'Admin', icon:'👑', color:'DC2626',
     pages: ['tables','pos','history','reports','menu-mgmt','branches','users','settings'],
@@ -3469,10 +3517,53 @@ const ROLES = {
   }
 };
 
+/* ── CUSTOMIZABLE ROLE PERMISSIONS ──────────────────────────────
+   Admin แก้ไขสิทธิ์ Manager/Cashier ได้จากหน้า 👥 ผู้ใช้งาน
+   Admin เองถูกล็อกไว้ (สิทธิ์เต็มเสมอ) เพื่อกันล็อกตัวเองออกจากระบบ
+   ค่าที่แก้บันทึกใน localStorage: rp_role_perms                    */
+let ROLES = JSON.parse(JSON.stringify(DEFAULT_ROLES));
+
+function loadRolePerms(){
+  try{
+    const s=localStorage.getItem('rp_role_perms');
+    if(!s)return;
+    const ov=JSON.parse(s);
+    ['manager','cashier'].forEach(r=>{
+      if(!ov[r])return;
+      if(Array.isArray(ov[r].pages))ROLES[r].pages=ov[r].pages.slice();
+      if(ov[r].can)Object.assign(ROLES[r].can,ov[r].can);
+    });
+  }catch(e){console.error('loadRolePerms:',e);}
+}
+function saveRolePerms(){
+  const ov={};
+  ['manager','cashier'].forEach(r=>{ov[r]={pages:ROLES[r].pages,can:ROLES[r].can};});
+  localStorage.setItem('rp_role_perms',JSON.stringify(ov));
+}
+function resetRolePermsToDefault(){
+  localStorage.removeItem('rp_role_perms');
+  ROLES=JSON.parse(JSON.stringify(DEFAULT_ROLES));
+}
+loadRolePerms();
+
 /* ── SESSION STATE ────────────────────────────────────────────── */
 let currentUser   = null;  // {id, username, displayName, role, branchId}
 let sessionToken  = null;
-const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 hours (เปลี่ยนได้)
+const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000; // fallback
+/* Session modes: always = ถามล็อกอินทุกครั้ง (ค่าเริ่มต้น) */
+const SESSION_MODES = { always:0, '8h':8*3600000, '24h':24*3600000, '7d':7*86400000, '30d':30*86400000 };
+function getSessionMode(){
+  // migrate legacy flag
+  if(localStorage.getItem('rp_always_login')==='1'){ localStorage.setItem('rp_session_mode','always'); localStorage.removeItem('rp_always_login'); }
+  return localStorage.getItem('rp_session_mode') || 'always';
+}
+function setSessionMode(m){
+  localStorage.setItem('rp_session_mode', m);
+  if(m==='always') localStorage.removeItem('rp_session');
+  refreshSessionInfo();
+  const lbl={always:'ถามล็อกอินทุกครั้งที่เปิด',['8h']:'จำการเข้าสู่ระบบ 8 ชั่วโมง',['24h']:'จำการเข้าสู่ระบบ 24 ชั่วโมง',['7d']:'จำการเข้าสู่ระบบ 7 วัน',['30d']:'จำการเข้าสู่ระบบ 30 วัน'}[m]||m;
+  toast('🔐 '+lbl,'success',2200);
+}
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_MS = 5 * 60 * 1000;             // 5 minutes
 
@@ -3618,8 +3709,13 @@ async function doLogin() {
     sessionToken = generateToken();
     currentUser  = { id:user.id, username:user.username, displayName:user.displayName, role:user.role };
     // Persist session
-    const sessionData = { token:sessionToken, userId:user.id, expiresAt:Date.now()+SESSION_TIMEOUT_MS };
-    localStorage.setItem('rp_session', JSON.stringify(sessionData));
+    const _mode=getSessionMode();
+    if(_mode!=='always'){
+      const sessionData = { token:sessionToken, userId:user.id, expiresAt:Date.now()+(SESSION_MODES[_mode]||SESSION_TIMEOUT_MS) };
+      localStorage.setItem('rp_session', JSON.stringify(sessionData));
+    } else {
+      localStorage.removeItem('rp_session'); // ไม่จำ session — เปิดใหม่ต้องล็อกอิน
+    }
     // Update last login
     user.lastLogin=new Date().toISOString(); persistUsers();
     // Dismiss overlay, navigate to table layout, apply RBAC
@@ -3656,8 +3752,8 @@ function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
 /* ── SESSION RESTORE ──────────────────────────────────────────── */
 async function tryRestoreSession(){
-  // ถ้าตั้งค่าให้ล็อกอินทุกครั้ง ให้ล้าง session ก่อน
-  if(localStorage.getItem('rp_always_login')==='1'){
+  // โหมด "ถามล็อกอินทุกครั้ง" (ค่าเริ่มต้น) — ไม่ restore session
+  if(getSessionMode()==='always'){
     localStorage.removeItem('rp_session');
     return false;
   }
@@ -3670,6 +3766,12 @@ async function tryRestoreSession(){
     if(!user){ localStorage.removeItem('rp_session'); return false; }
     sessionToken=sess.token;
     currentUser={id:user.id,username:user.username,displayName:user.displayName,role:user.role};
+    // ต่ออายุ session อัตโนมัติ (sliding renewal)
+    const _m=getSessionMode();
+    if(_m!=='always'){
+      sess.expiresAt=Date.now()+(SESSION_MODES[_m]||SESSION_TIMEOUT_MS);
+      localStorage.setItem('rp_session',JSON.stringify(sess));
+    }
     return true;
   }catch(e){ return false; }
 }
@@ -3805,6 +3907,8 @@ function switchToUsersPage(){
   // Re-apply addUserBtn visibility (page is now active)
   const addUBtn=document.getElementById('addUserBtn');
   if(addUBtn) addUBtn.style.display=currentUser?.role==='admin'?'':'none';
+  const rpBtn=document.getElementById('rolePermsBtn');
+  if(rpBtn) rpBtn.style.display=currentUser?.role==='admin'?'':'none';
   renderUsersList();
   // Show empty-state hint in form panel on first open, not blank form
   const eid=document.getElementById('editUserId')?.value;
@@ -4568,11 +4672,10 @@ function printCashierReport(){
    PATCH switchPage reports to build branch filters
 ══════════════════════════════════════════════════════ */
 function toggleAlwaysLogin(){
-  var tog=document.getElementById('alwaysLoginTog');
-  var on=tog.classList.contains('on');
-  tog.className='avail-tog'+(on?'':' on');
-  localStorage.setItem('rp_always_login', on?'':'1');
-  toast(on?(lang==='th'?'Session จะถูกจำไว้ 8 ชม.':'Session saved 8h'):(lang==='th'?'ต้องล็อกอินทุกครั้ง':'Login required each time'),'success',2000);
+  // legacy — now handled by session mode dropdown
+  const cur=getSessionMode();
+  setSessionMode(cur==='always'?'8h':'always');
+  refreshSettings();
 }
 
 function refreshSettings(){
@@ -4586,7 +4689,9 @@ function refreshSettings(){
   refreshSessionInfo();
   refreshSplashSettingsUI();
   var _altog=document.getElementById('alwaysLoginTog');
-  if(_altog){var _al=localStorage.getItem('rp_always_login')==='1';_altog.className='avail-tog'+(_al?' on':'');}
+  if(_altog){var _al=getSessionMode()==='always';_altog.className='avail-tog'+(_al?' on':'');}
+  var _smSel=document.getElementById('sessionModeSel');
+  if(_smSel)_smSel.value=getSessionMode();
   loadVatTypeSel();
   loadEODSettings();
 }
@@ -4721,6 +4826,7 @@ function refreshSplashSettingsUI(){
   if(btn) btn.style.display = img ? '' : 'none';
   const ti = document.getElementById('splashTapInput');
   if(ti) ti.value = localStorage.getItem('rp_splash_tap') || '';
+  if(typeof refreshSplashSyncStatus==='function') refreshSplashSyncStatus();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -4854,6 +4960,162 @@ window.addEventListener('popstate',function(ev){
 
 // วาง guard state ตอนโหลด (หลัง login สำเร็จ state นี้จะดัก back ครั้งแรก)
 history.pushState({rpGuard:true},'');
+
+
+/* ══════════════════════════════════════════════════════
+   ROLE PERMISSIONS EDITOR (Admin only)
+══════════════════════════════════════════════════════ */
+const PERM_PAGES=[
+  ['tables','ผังโต๊ะ'],['pos','ขายหน้าร้าน (POS)'],['history','ประวัติการขาย'],
+  ['reports','รายงาน'],['menu-mgmt','จัดการเมนู'],['branches','จัดการสาขา (ดู)']
+];
+const PERM_CAPS=[
+  ['editMenu','แก้ไขเมนู / เพิ่ม-ลบรายการ'],
+  ['editPrice','แก้ไขราคา'],
+  ['editCategories','แก้ไขหมวดหมู่'],
+  ['clearHistory','ล้างประวัติการขาย'],
+  ['pushMenu','Push เมนูข้ามสาขา'],
+  ['viewAllSales','เห็นยอดขายทุกสาขา'],
+  ['manageBranches','เพิ่ม/แก้ไข/ลบสาขา']
+];
+
+function openRolePermsEditor(){
+  if(currentUser?.role!=='admin'){toast('⛔ เฉพาะ Admin เท่านั้น','error');return;}
+  buildRolePermsUI();
+  openMo('moRolePerms');
+}
+
+function buildRolePermsUI(){
+  const el=document.getElementById('rolePermsBody');
+  if(!el)return;
+  function chkCell(role,type,key){
+    const checked=type==='page'?ROLES[role].pages.includes(key):!!ROLES[role].can[key];
+    return '<td style="text-align:center;padding:6px"><input type="checkbox" data-role="'+role+'" data-type="'+type+'" data-key="'+key+'"'+(checked?' checked':'')+' style="width:17px;height:17px;accent-color:var(--teal);cursor:pointer"></td>';
+  }
+  let html='<table class="perm-matrix" style="width:100%">'
+    +'<thead><tr><th style="text-align:left">สิทธิ์</th><th>👑 Admin</th><th>🏆 Manager</th><th>💰 Cashier</th></tr></thead><tbody>';
+  html+='<tr><td colspan="4" style="background:var(--teal-light);font-weight:700;color:var(--teal);font-size:11px;padding:6px 10px">การเข้าถึงหน้า</td></tr>';
+  PERM_PAGES.forEach(function(p){
+    html+='<tr><td>'+p[1]+'</td><td style="text-align:center;color:var(--green)">✓</td>'
+      +chkCell('manager','page',p[0])+chkCell('cashier','page',p[0])+'</tr>';
+  });
+  html+='<tr><td>จัดการผู้ใช้ / ตั้งค่าระบบ</td><td style="text-align:center;color:var(--green)">✓</td><td style="text-align:center;color:var(--border)">🔒</td><td style="text-align:center;color:var(--border)">🔒</td></tr>';
+  html+='<tr><td colspan="4" style="background:var(--teal-light);font-weight:700;color:var(--teal);font-size:11px;padding:6px 10px">ความสามารถ</td></tr>';
+  PERM_CAPS.forEach(function(cp){
+    html+='<tr><td>'+cp[1]+'</td><td style="text-align:center;color:var(--green)">✓</td>'
+      +chkCell('manager','can',cp[0])+chkCell('cashier','can',cp[0])+'</tr>';
+  });
+  html+='<tr><td colspan="4" style="background:var(--teal-light);font-weight:700;color:var(--teal);font-size:11px;padding:6px 10px">ส่วนลดสูงสุด (%)</td></tr>';
+  html+='<tr><td>ให้ส่วนลดได้ไม่เกิน</td><td style="text-align:center;color:var(--gray)">ไม่จำกัด</td>'
+    +'<td style="text-align:center;padding:5px"><input type="number" id="rpp_manager_discount" min="0" max="100" value="'+(ROLES.manager.can.discount||0)+'" class="fc" style="width:70px;text-align:center;padding:5px"></td>'
+    +'<td style="text-align:center;padding:5px"><input type="number" id="rpp_cashier_discount" min="0" max="100" value="'+(ROLES.cashier.can.discount||0)+'" class="fc" style="width:70px;text-align:center;padding:5px"></td></tr>';
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+
+function saveRolePermsFromUI(){
+  ['manager','cashier'].forEach(function(role){
+    const pages=[];
+    PERM_PAGES.forEach(function(p){
+      const cb=document.querySelector('input[data-role="'+role+'"][data-type="page"][data-key="'+p[0]+'"]');
+      if(cb&&cb.checked)pages.push(p[0]);
+    });
+    ROLES[role].pages=pages;
+    PERM_CAPS.forEach(function(cp){
+      const cb=document.querySelector('input[data-role="'+role+'"][data-type="can"][data-key="'+cp[0]+'"]');
+      if(cb)ROLES[role].can[cp[0]]=cb.checked;
+    });
+    const d=document.getElementById('rpp_'+role+'_discount');
+    if(d)ROLES[role].can.discount=Math.max(0,Math.min(100,parseInt(d.value)||0));
+  });
+  saveRolePerms();
+  applyRBAC();
+  closeMo('moRolePerms');
+  toast('✅ บันทึกสิทธิ์ Role แล้ว มีผลทันที','success',2500);
+}
+
+function resetRolePermsUI(){
+  showConfirm('↩','คืนค่าสิทธิ์เริ่มต้น?','Manager และ Cashier จะกลับเป็นค่ามาตรฐาน',function(){
+    resetRolePermsToDefault();
+    buildRolePermsUI();
+    applyRBAC();
+    toast('↩ คืนค่าเริ่มต้นแล้ว','success',2000);
+  });
+}
+
+
+/* ══════════════════════════════════════════════════════
+   CENTRAL SPLASH IMAGE — sync via Google Sheets Settings
+   (Sheets cell limit ~50,000 chars, so compress harder here
+   than the local-only version used by setSplashImage)
+══════════════════════════════════════════════════════ */
+function compressForCloud(dataUrl, cb, attempt){
+  attempt = attempt || 0;
+  const stages = [
+    {dim:500, q:0.6}, {dim:380, q:0.5}, {dim:300, q:0.4}, {dim:220, q:0.35}
+  ];
+  if (attempt >= stages.length) { cb(null); return; } // too big even at smallest
+  const s = stages[attempt];
+  compressImage(dataUrl, s.dim, s.q, out=>{
+    if (out.length <= 42000) cb(out);
+    else compressForCloud(dataUrl, cb, attempt+1);
+  });
+}
+
+async function pushSplashToCloud(){
+  if(!getGasUrl()){ toast('⚠️ กรุณาตั้งค่า API URL ก่อน','warning'); return; }
+  const local = localStorage.getItem('rp_splash_img');
+  if(!local){ toast('⚠️ กรุณาเลือกรูปก่อน','warning'); return; }
+  const statusEl = document.getElementById('splashSyncStatus');
+  if(statusEl) statusEl.textContent = '⟳ กำลังบีบอัดและอัปโหลด...';
+  compressForCloud(local, async (compressed)=>{
+    if(!compressed){
+      toast('❌ รูปใหญ่เกินไปสำหรับค่ากลาง กรุณาใช้รูปที่เล็กกว่านี้','error',4000);
+      if(statusEl) statusEl.textContent = '❌ รูปใหญ่เกินไป — ลองรูปที่เล็กกว่า';
+      return;
+    }
+    try{
+      const tap = localStorage.getItem('rp_splash_tap') || '';
+      settings.splashImg = compressed;
+      settings.splashTap = tap;
+      localStorage.setItem('rp_settings', JSON.stringify(settings));
+      await gasPost('saveSettings', settings);
+      toast('✅ ตั้งเป็นค่ากลางทุกสาขาแล้ว','success',3000);
+      refreshSplashSyncStatus();
+    }catch(e){
+      toast('❌ อัปโหลดล้มเหลว: '+e.message,'error');
+      if(statusEl) statusEl.textContent = '❌ อัปโหลดล้มเหลว';
+    }
+  });
+}
+
+async function clearCentralSplash(){
+  if(!getGasUrl()){ toast('⚠️ กรุณาตั้งค่า API URL ก่อน','warning'); return; }
+  showConfirm('🗑️','ยกเลิกภาพค่ากลาง?','สาขาอื่นจะไม่ได้รับรูปนี้อีกหลังซิงก์ครั้งถัดไป (รูปในเครื่องนี้ยังอยู่)',async()=>{
+    try{
+      delete settings.splashImg;
+      delete settings.splashTap;
+      localStorage.setItem('rp_settings', JSON.stringify(settings));
+      await gasPost('saveSettings', settings);
+      toast('✅ ยกเลิกค่ากลางแล้ว','success');
+      refreshSplashSyncStatus();
+    }catch(e){ toast('❌ ล้มเหลว: '+e.message,'error'); }
+  });
+}
+
+function refreshSplashSyncStatus(){
+  const el = document.getElementById('splashSyncStatus');
+  if(!el) return;
+  if(!getGasUrl()){ el.textContent = '📴 ยังไม่ได้เชื่อมต่อ Google Sheets'; return; }
+  if(settings.splashImg){
+    const same = settings.splashImg === localStorage.getItem('rp_splash_img');
+    el.textContent = same
+      ? '☁️ ใช้เป็นค่ากลางอยู่ (ทุกสาขาจะได้รูปนี้)'
+      : '⚠️ มีค่ากลางอยู่ แต่ไม่ตรงกับรูปที่แสดงในเครื่องนี้ — กด "ซิงก์" เพื่ออัปเดต';
+  } else {
+    el.textContent = '📍 ยังไม่มีค่ากลาง — รูปนี้ใช้เฉพาะเครื่องนี้';
+  }
+}
 
 function init(){
   loadAll();loadTables();loadCategories();loadBranches();
